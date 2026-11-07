@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ruptura | Ethio-Invoice & Receipt Generator (NOVS)</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- html2pdf for PDF generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            bg: '#080b11',
+                            card: '#0f172a',
+                            border: '#1e293b',
+                            cyan: '#00f2fe',
+                            accent: '#38bdf8',
+                            emerald: '#10b981',
+                            purple: '#8b5cf6'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        body {
+            background-color: #080b11;
+            color: #f3f4f6;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism card effects */
+        .glass-card {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-input {
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .glass-input:focus {
+            background: rgba(30, 41, 59, 0.9);
+            border-color: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+            outline: none;
+        }
+
+        /* Neon Glows */
+        .neon-glow-cyan {
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.35);
+        }
+        .neon-glow-emerald {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #080b11;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #38bdf8;
+        }
+
+        /* Print/PDF specific overrides */
+        .pdf-export-container {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+    <!-- Top Navigation / Branding Header -->
+    <header class="sticky top-0 z-40 glass-card border-b border-gray-800/80 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <!-- Ruptura Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-sky-500 to-emerald-400 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid font-bold">R</i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-extrabold text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-cyan-400">RUPTURA</span>
+                        <span class="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">SaaS v1.0</span>
+                    </div>
+                    <p class="text-[10px] text-gray-400 tracking-tight flex items-center gap-1">
+                        <span>Break Through Barriers</span>
+                        <span class="text-gray-600">•</span>
+                        <span class="text-emerald-400 font-medium">Powered by NOVS</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Quick Action Tabs -->
+            <div class="flex items-center gap-2">
+                <button onclick="switchTab('editor')" id="tab-btn-editor" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 bg-sky-500/20 text-sky-400 border border-sky-500/40 transition">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span class="hidden sm:inline">Editor</span>
+                </button>
+                <button onclick="switchTab('history')" id="tab-btn-history" class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 bg-slate-800 text-gray-400 hover:text-white border border-gray-700 transition">
+                    <i class="fa-solid fa-box-archive"></i>
+                    <span class="hidden sm:inline">History</span>
+                    <span id="history-badge" class="ml-1 px-1.5 py-0.2 bg-cyan-500 text-slate-950 text-[10px] rounded-full font-bold">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- EDITOR TAB VIEW -->
+        <section id="view-editor" class="lg:col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
+            
+            <!-- LEFT FORM COLUMN (Inputs & Logic) -->
+            <div class="lg:col-span-7 flex flex-col gap-5">
+                
+                <!-- Business & Client Details Card -->
+                <div class="glass-card rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-building-user"></i> Business & Client Information
+                        </h2>
+                        <span class="text-xs text-gray-400">Step 1 of 3</span>
+                    </div>
+
+                    <!-- Business/Freelancer Info -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Your Name / Agency</label>
+                            <input type="text" id="issuerName" value="NOVS Digital Agency" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="e.g. Abebe Tech Solutions">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Phone Number</label>
+                            <input type="text" id="issuerPhone" value="+251 911 00 11 22" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="+251 9...">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Email / Telegram</label>
+                            <input type="text" id="issuerEmail" value="contact@novs.et" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="email or @handle">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">TIN Number (Optional)</label>
+                            <input type="text" id="issuerTin" value="0049281920" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="TIN Number">
+                        </div>
+                    </div>
+
+                    <div class="border-t border-gray-800/60 pt-3">
+                        <p class="text-[11px] font-semibold text-gray-400 mb-2">Billed To (Client Details):</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-300 mb-1">Client Name / Business</label>
+                                <input type="text" id="clientName" value="Ethio Marketing Ltd" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="Client Name">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-300 mb-1">Client Phone / Telegram</label>
+                                <input type="text" id="clientContact" value="+251 922 33 44 55" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="Contact Details">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Invoice Meta & Currency Card -->
+                <div class="glass-card rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-file-invoice"></i> Invoice Metadata & Currency
+                        </h2>
+                        <span class="text-xs text-gray-400">Step 2 of 3</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Invoice No.</label>
+                            <input type="text" id="invoiceNumber" readonly class="w-full text-xs rounded-xl px-3 py-2.5 glass-input font-mono bg-slate-900/90 text-cyan-400 border-cyan-500/30">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Currency</label>
+                            <select id="currencySelect" onchange="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input bg-slate-800">
+                                <option value="ETB" selected>ETB (ብር)</option>
+                                <option value="USD">USD ($)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Issue Date</label>
+                            <input type="date" id="issueDate" onchange="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Due Date</label>
+                            <input type="date" id="dueDate" onchange="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Line Items Engine -->
+                <div class="glass-card rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-list-check"></i> Services & Products
+                        </h2>
+                        <button onclick="addLineItem()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 transition flex items-center gap-1">
+                            <i class="fa-solid fa-plus"></i> Add Item
+                        </button>
+                    </div>
+
+                    <!-- Line Items List -->
+                    <div id="line-items-container" class="flex flex-col gap-3">
+                        <!-- Dynamic items generated via JS -->
+                    </div>
+
+                    <!-- Tax & Discount Engine Controls -->
+                    <div class="border-t border-gray-800 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Ethiopian Tax Type</label>
+                            <select id="taxType" onchange="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input bg-slate-800">
+                                <option value="0">No Tax (0%)</option>
+                                <option value="15" selected>15% VAT (Value Added Tax)</option>
+                                <option value="2">2% TOT (Turnover Tax)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Discount (%)</label>
+                            <input type="number" id="discountPercent" value="0" min="0" max="100" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="0%">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ethiopian Payment Options & Bank Details -->
+                <div class="glass-card rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
+                    <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+                        <h2 class="text-sm font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-building-columns"></i> Ethiopian Payment Methods
+                        </h2>
+                        <span class="text-xs text-gray-400">Step 3 of 3</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Bank Name</label>
+                            <select id="bankName" onchange="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input bg-slate-800">
+                                <option value="Commercial Bank of Ethiopia (CBE)">Commercial Bank of Ethiopia (CBE)</option>
+                                <option value="Telebirr">Telebirr (Telecel/Ethio)</option>
+                                <option value="Bank of Abyssinia (BOA)">Bank of Abyssinia (BOA)</option>
+                                <option value="Dashen Bank">Dashen Bank</option>
+                                <option value="Awash Bank">Awash Bank</option>
+                                <option value="CBE Birr">CBE Birr</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Account Name</label>
+                            <input type="text" id="bankAccName" value="NOVS Digital Agency" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input" placeholder="Account Holder Name">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Account / Phone Number</label>
+                            <input type="text" id="bankAccNo" value="1000123456789" oninput="updateInvoice()" class="w-full text-xs rounded-xl px-3 py-2.5 glass-input font-mono" placeholder="Account Number or Telebirr Phone">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Toolbar for Mobile/Desktop -->
+                <div class="flex flex-wrap items-center gap-3 pt-2">
+                    <button onclick="exportToPDF()" class="flex-1 min-w-[140px] py-3 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-cyan-500 to-sky-500 hover:from-cyan-400 hover:to-sky-400 text-slate-950 shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-pdf text-sm"></i> Export PDF Receipt
+                    </button>
+                    <button onclick="sendToTelegram()" class="flex-1 min-w-[140px] py-3 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/40 transition flex items-center justify-center gap-2">
+                        <i class="fa-paper-plane text-sm"></i> Send via Telegram
+                    </button>
+                    <button onclick="copySummaryText()" class="py-3 px-4 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-gray-300 border border-gray-700 transition flex items-center justify-center gap-2" title="Copy Text Summary">
+                        <i class="fa-solid fa-copy"></i>
+                    </button>
+                    <button onclick="saveInvoiceToHistory()" class="py-3 px-4 rounded-xl text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 transition flex items-center justify-center gap-2" title="Save to History">
+                        <i class="fa-solid fa-bookmark"></i>
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN: LIVE INTERACTIVE PREVIEW PANEL -->
+            <div class="lg:col-span-5 flex flex-col gap-4">
+                <div class="sticky top-20">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Live Document Preview
+                        </span>
+                        <span class="text-[10px] text-gray-500 font-mono">Print/Export Ready</span>
+                    </div>
+
+                    <!-- PDF PREVIEW PAPER CARD -->
+                    <div id="pdf-invoice-template" class="pdf-export-container bg-white text-slate-900 rounded-xl p-6 sm:p-8 shadow-2xl border border-gray-200 relative overflow-hidden text-xs leading-relaxed">
+                        
+                        <!-- Watermark Emblem -->
+                        <div class="absolute -right-8 -bottom-8 opacity-5 pointer-events-none select-none">
+                            <span class="text-9xl font-black tracking-tighter text-slate-900">RUPTURA</span>
+                        </div>
+
+                        <!-- Invoice Header inside Paper -->
+                        <div class="flex justify-between items-start border-b-2 border-slate-900 pb-5 mb-5">
+                            <div>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <div class="w-7 h-7 rounded bg-slate-900 text-white flex items-center justify-center font-black text-sm">R</div>
+                                    <span class="font-extrabold text-lg tracking-wider text-slate-900">RUPTURA</span>
+                                </div>
+                                <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">TAX INVOICE / RECEIPT</p>
+                                <p class="text-[9px] text-slate-400 mt-0.5">Powered by NOVS Platform</p>
+                            </div>
+                            <div class="text-right">
+                                <span id="preview-invoice-no" class="font-mono font-bold text-sm text-slate-900 block">RUP-2026-0001</span>
+                                <span class="text-[10px] text-slate-500 block mt-0.5">Date: <span id="preview-issue-date" class="font-medium text-slate-800">2026-11-06</span></span>
+                                <span class="text-[10px] text-slate-500 block">Due: <span id="preview-due-date" class="font-medium text-slate-800">2026-11-20</span></span>
+                            </div>
+                        </div>
+
+                        <!-- Issuer & Client Grid -->
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <p class="text-[10px] uppercase font-bold text-slate-400 mb-1">Issued By:</p>
+                                <p id="preview-issuer-name" class="font-bold text-slate-900 text-xs">NOVS Digital Agency</p>
+                                <p id="preview-issuer-phone" class="text-slate-600 text-[11px]">+251 911 00 11 22</p>
+                                <p id="preview-issuer-email" class="text-slate-600 text-[11px]">contact@novs.et</p>
+                                <p id="preview-issuer-tin" class="text-slate-500 text-[10px] font-mono mt-0.5">TIN: 0049281920</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] uppercase font-bold text-slate-400 mb-1">Billed To:</p>
+                                <p id="preview-client-name" class="font-bold text-slate-900 text-xs">Ethio Marketing Ltd</p>
+                                <p id="preview-client-contact" class="text-slate-600 text-[11px]">+251 922 33 44 55</p>
+                            </div>
+                        </div>
+
+                        <!-- Table of Line Items -->
+                        <div class="mb-6 overflow-hidden rounded-lg border border-slate-200">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-100 text-slate-700 text-[10px] uppercase font-bold border-b border-slate-200">
+                                        <th class="py-2 px-3">Item Description</th>
+                                        <th class="py-2 px-2 text-center">Qty</th>
+                                        <th class="py-2 px-2 text-right">Price</th>
+                                        <th class="py-2 px-3 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="preview-line-items" class="divide-y divide-slate-100 text-[11px]">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Totals Calculation Box -->
+                        <div class="flex justify-between items-start pt-2 border-t border-slate-200 mb-6">
+                            <!-- Left: Bank Transfer Details Box -->
+                            <div class="w-1/2 pr-3">
+                                <p class="text-[10px] font-bold uppercase text-slate-400 mb-1">Payment Details:</p>
+                                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[10px]">
+                                    <p class="font-bold text-slate-800" id="preview-bank-name">Commercial Bank of Ethiopia</p>
+                                    <p class="text-slate-600" id="preview-bank-acc-name">NOVS Digital Agency</p>
+                                    <p class="font-mono font-bold text-slate-900 mt-1" id="preview-bank-acc-no">1000123456789</p>
+                                </div>
+                            </div>
+
+                            <!-- Right: Calculations Breakdown -->
+                            <div class="w-1/2 pl-3 flex flex-col gap-1 text-[11px] text-right">
+                                <div class="flex justify-between text-slate-600">
+                                    <span>Subtotal:</span>
+                                    <span id="preview-subtotal" class="font-mono">0.00 ETB</span>
+                                </div>
+                                <div class="flex justify-between text-slate-600" id="preview-discount-row">
+                                    <span>Discount (<span id="preview-discount-rate">0</span>%):</span>
+                                    <span id="preview-discount" class="font-mono">-0.00 ETB</span>
+                                </div>
+                                <div class="flex justify-between text-slate-600" id="preview-tax-row">
+                                    <span>Tax (<span id="preview-tax-rate">15</span>%):</span>
+                                    <span id="preview-tax" class="font-mono">+0.00 ETB</span>
+                                </div>
+                                <div class="flex justify-between text-slate-900 font-extrabold text-sm pt-2 border-t border-slate-900">
+                                    <span>Grand Total:</span>
+                                    <span id="preview-grand-total" class="font-mono text-slate-900">0.00 ETB</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Footer Stamp/Signature area -->
+                        <div class="border-t border-dashed border-slate-300 pt-3 flex justify-between items-center text-[9px] text-slate-400">
+                            <div>
+                                <p>Thank you for your business!</p>
+                                <p class="text-[8px]">Generated electronically via Ruptura SaaS Engine.</p>
+                            </div>
+                            <div class="text-right">
+                                <div class="border-b border-slate-400 w-24 mb-1"></div>
+                                <p class="uppercase font-semibold text-slate-500">Authorized Signature</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+
+        <!-- HISTORY TAB VIEW -->
+        <section id="view-history" class="hidden lg:col-span-12 flex flex-col gap-4">
+            <div class="glass-card rounded-2xl p-5">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-gray-800 pb-4 mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-box-archive text-cyan-400"></i> Saved Invoices & Receipts
+                        </h2>
+                        <p class="text-xs text-gray-400">View and reload your previously generated client receipts.</p>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <input type="text" id="historySearch" oninput="renderHistory()" class="text-xs rounded-xl px-3 py-2 glass-input w-full sm:w-64" placeholder="Search by client or invoice no...">
+                        <button onclick="clearAllHistory()" class="px-3 py-2 rounded-xl text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition">Clear</button>
+                    </div>
+                </div>
+
+                <!-- History Items List -->
+                <div id="history-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Dynamic rendering -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Notification Toast Modal -->
+    <div id="toast-modal" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="glass-card bg-slate-900/90 text-white px-4 py-3 rounded-xl border border-cyan-500/50 shadow-2xl flex items-center gap-3">
+            <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+            <span id="toast-message" class="text-xs font-semibold">Action completed successfully!</span>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC ENGINE -->
+    <script>
+        // Initialize Telegram WebApp SDK if available
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+        }
+
+        // Global State
+        let lineItems = [
+            { id: 1, description: 'Web Development & Telegram Mini App', qty: 1, price: 25000 },
+            { id: 2, description: 'Branding & UI/UX Design (Ruptura)', qty: 1, price: 8000 }
+        ];
+
+        let invoiceHistory = JSON.parse(localStorage.getItem('ruptura_invoices_history') || '[]');
+
+        // On Page Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            generateInvoiceNumber();
+            setDefaultDates();
+            renderLineItems();
+            updateInvoice();
+            renderHistory();
+        });
+
+        // Tab Switching
+        function switchTab(tabName) {
+            const editorView = document.getElementById('view-editor');
+            const historyView = document.getElementById('view-history');
+            const tabBtnEditor = document.getElementById('tab-btn-editor');
+            const tabBtnHistory = document.getElementById('tab-btn-history');
+
+            if (tabName === 'editor') {
+                editorView.classList.remove('hidden');
+                historyView.classList.add('hidden');
+                tabBtnEditor.className = "px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 bg-sky-500/20 text-sky-400 border border-sky-500/40 transition";
+                tabBtnHistory.className = "px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 bg-slate-800 text-gray-400 hover:text-white border border-gray-700 transition";
+            } else {
+                editorView.classList.add('hidden');
+                historyView.classList.remove('hidden');
+                tabBtnHistory.className = "px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 bg-sky-500/20 text-sky-400 border border-sky-500/40 transition";
+                tabBtnEditor.className = "px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 bg-slate-800 text-gray-400 hover:text-white border border-gray-700 transition";
+                renderHistory();
+            }
+        }
+
+        // Generate Unique Invoice Number
+        function generateInvoiceNumber() {
+            const rand = Math.floor(1000 + Math.random() * 9000);
+            const year = new Date().getFullYear();
+            document.getElementById('invoiceNumber').value = `RUP-${year}-${rand}`;
+        }
+
+        // Set Default Dates (Today & +14 Days Due)
+        function setDefaultDates() {
+            const today = new Date();
+            const dueDate = new Date();
+            dueDate.setDate(today.getDate() + 14);
+
+            document.getElementById('issueDate').value = today.toISOString().split('T')[0];
+            document.getElementById('dueDate').value = dueDate.toISOString().split('T')[0];
+        }
+
+        // Render Dynamic Line Items Form inputs
+        function renderLineItems() {
+            const container = document.getElementById('line-items-container');
+            container.innerHTML = '';
+
+            lineItems.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'grid grid-cols-12 gap-2 items-center bg-slate-900/40 p-2.5 rounded-xl border border-gray-800';
+                row.innerHTML = `
+                    <div class="col-span-6 sm:col-span-6">
+                        <input type="text" value="${item.description}" oninput="updateItem(${item.id}, 'description', this.value)" class="w-full text-xs rounded-lg px-2.5 py-1.5 glass-input" placeholder="Service description">
+                    </div>
+                    <div class="col-span-2 sm:col-span-2">
+                        <input type="number" value="${item.qty}" min="1" oninput="updateItem(${item.id}, 'qty', this.value)" class="w-full text-xs rounded-lg px-2 py-1.5 glass-input text-center" placeholder="Qty">
+                    </div>
+                    <div class="col-span-3 sm:col-span-3">
+                        <input type="number" value="${item.price}" min="0" oninput="updateItem(${item.id}, 'price', this.value)" class="w-full text-xs rounded-lg px-2 py-1.5 glass-input text-right" placeholder="Price">
+                    </div>
+                    <div class="col-span-1 text-center">
+                        <button onclick="removeLineItem(${item.id})" class="text-red-400 hover:text-red-300 text-xs p-1" title="Remove">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        // Add Line Item
+        function addLineItem() {
+            const newItem = {
+                id: Date.now(),
+                description: 'Additional Service / Product',
+                qty: 1,
+                price: 1000
+            };
+            lineItems.push(newItem);
+            renderLineItems();
+            updateInvoice();
+        }
+
+        // Remove Line Item
+        function removeLineItem(id) {
+            if (lineItems.length <= 1) {
+                showToast("Invoice must have at least one line item.", "warning");
+                return;
+            }
+            lineItems = lineItems.filter(i => i.id !== id);
+            renderLineItems();
+            updateInvoice();
+        }
+
+        // Update Item State
+        function updateItem(id, field, value) {
+            const item = lineItems.find(i => i.id === id);
+            if (item) {
+                if (field === 'qty' || field === 'price') {
+                    item[field] = parseFloat(value) || 0;
+                } else {
+                    item[field] = value;
+                }
+                updateInvoice();
+            }
+        }
+
+        // Main Calculations & Live Preview Renderer
+        function updateInvoice() {
+            const currency = document.getElementById('currencySelect').value;
+            const symbol = currency === 'ETB' ? ' ETB' : ' $';
+
+            // Text Inputs
+            document.getElementById('preview-issuer-name').innerText = document.getElementById('issuerName').value || 'NOVS Partner';
+            document.getElementById('preview-issuer-phone').innerText = document.getElementById('issuerPhone').value || '';
+            document.getElementById('preview-issuer-email').innerText = document.getElementById('issuerEmail').value || '';
+            document.getElementById('preview-issuer-tin').innerText = document.getElementById('issuerTin').value ? `TIN: ${document.getElementById('issuerTin').value}` : '';
+            
+            document.getElementById('preview-client-name').innerText = document.getElementById('clientName').value || 'Valued Client';
+            document.getElementById('preview-client-contact').innerText = document.getElementById('clientContact').value || '';
+
+            document.getElementById('preview-invoice-no').innerText = document.getElementById('invoiceNumber').value;
+            document.getElementById('preview-issue-date').innerText = document.getElementById('issueDate').value;
+            document.getElementById('preview-due-date').innerText = document.getElementById('dueDate').value;
+
+            document.getElementById('preview-bank-name').innerText = document.getElementById('bankName').value;
+            document.getElementById('preview-bank-acc-name').innerText = document.getElementById('bankAccName').value;
+            document.getElementById('preview-bank-acc-no').innerText = document.getElementById('bankAccNo').value;
+
+            // Calculations
+            let subtotal = 0;
+            const lineItemsTableBody = document.getElementById('preview-line-items');
+            lineItemsTableBody.innerHTML = '';
+
+            lineItems.forEach(item => {
+                const itemTotal = (item.qty || 0) * (item.price || 0);
+                subtotal += itemTotal;
+
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-slate-100';
+                tr.innerHTML = `
+                    <td class="py-2 px-3 font-medium text-slate-800">${item.description || 'Item'}</td>
+                    <td class="py-2 px-2 text-center text-slate-600">${item.qty}</td>
+                    <td class="py-2 px-2 text-right font-mono text-slate-600">${formatNumber(item.price)}</td>
+                    <td class="py-2 px-3 text-right font-mono font-semibold text-slate-900">${formatNumber(itemTotal)}</td>
+                `;
+                lineItemsTableBody.appendChild(tr);
+            });
+
+            const discountRate = parseFloat(document.getElementById('discountPercent').value) || 0;
+            const taxRate = parseFloat(document.getElementById('taxType').value) || 0;
+
+            const discountAmount = subtotal * (discountRate / 100);
+            const taxableAmount = subtotal - discountAmount;
+            const taxAmount = taxableAmount * (taxRate / 100);
+            const grandTotal = taxableAmount + taxAmount;
+
+            // Update Preview Numbers
+            document.getElementById('preview-subtotal').innerText = formatNumber(subtotal) + symbol;
+            document.getElementById('preview-discount-rate').innerText = discountRate;
+            document.getElementById('preview-discount').innerText = '-' + formatNumber(discountAmount) + symbol;
+            document.getElementById('preview-tax-rate').innerText = taxRate;
+            document.getElementById('preview-tax').innerText = '+' + formatNumber(taxAmount) + symbol;
+            document.getElementById('preview-grand-total').innerText = formatNumber(grandTotal) + symbol;
+        }
+
+        // Format Number with Commas
+        function formatNumber(num) {
+            return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num || 0);
+        }
+
+        // Export PDF
+        function exportToPDF() {
+            showToast("Generating crisp PDF document...", "info");
+            const element = document.getElementById('pdf-invoice-template');
+            const invNo = document.getElementById('invoiceNumber').value;
+
+            const opt = {
+                margin:       [0.3, 0.3, 0.3, 0.3],
+                filename:     `${invNo}_Receipt.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                showToast("PDF exported successfully!", "success");
+                saveInvoiceToHistory();
+            });
+        }
+
+        // Send Data to Telegram Bot WebApp
+        function sendToTelegram() {
+            const dataPayload = getInvoiceDataPayload();
+            
+            if (tg && tg.sendData) {
+                tg.sendData(JSON.stringify(dataPayload));
+                showToast("Sent data payload to Telegram!", "success");
+            } else {
+                showToast("Telegram WebApp context not detected. Copying summary...", "warning");
+                copySummaryText();
+            }
+        }
+
+        // Copy Plain Summary to Clipboard
+        function copySummaryText() {
+            const invNo = document.getElementById('invoiceNumber').value;
+            const client = document.getElementById('clientName').value;
+            const total = document.getElementById('preview-grand-total').innerText;
+            const bank = document.getElementById('bankName').value;
+            const acc = document.getElementById('bankAccNo').value;
+
+            const text = `🧾 *RUPTURA DIGITAL INVOICE*\n` +
+                         `Invoice No: ${invNo}\n` +
+                         `Client: ${client}\n` +
+                         `Total Amount Due: *${total}*\n\n` +
+                         `*Payment Details:*\nBank: ${bank}\nAccount No: \`${acc}\`\n\n` +
+                         `_Powered by NOVS Platform_`;
+
+            const dummy = document.createElement('textarea');
+            document.body.appendChild(dummy);
+            dummy.value = text;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+
+            showToast("Invoice summary copied to clipboard!", "success");
+        }
+
+        // Save Invoice to History (LocalStorage)
+        function saveInvoiceToHistory() {
+            const payload = getInvoiceDataPayload();
+            const existingIndex = invoiceHistory.findIndex(i => i.invoiceNumber === payload.invoiceNumber);
+
+            if (existingIndex >= 0) {
+                invoiceHistory[existingIndex] = payload;
+            } else {
+                invoiceHistory.unshift(payload);
+            }
+
+            localStorage.setItem('ruptura_invoices_history', JSON.stringify(invoiceHistory));
+            updateHistoryBadge();
+            showToast("Invoice saved to History!", "success");
+        }
+
+        // Get Complete Payload
+        function getInvoiceDataPayload() {
+            return {
+                invoiceNumber: document.getElementById('invoiceNumber').value,
+                issueDate: document.getElementById('issueDate').value,
+                dueDate: document.getElementById('dueDate').value,
+                currency: document.getElementById('currencySelect').value,
+                issuer: {
+                    name: document.getElementById('issuerName').value,
+                    phone: document.getElementById('issuerPhone').value,
+                    email: document.getElementById('issuerEmail').value,
+                    tin: document.getElementById('issuerTin').value
+                },
+                client: {
+                    name: document.getElementById('clientName').value,
+                    contact: document.getElementById('clientContact').value
+                },
+                lineItems: lineItems,
+                payment: {
+                    bank: document.getElementById('bankName').value,
+                    accName: document.getElementById('bankAccName').value,
+                    accNo: document.getElementById('bankAccNo').value
+                },
+                grandTotal: document.getElementById('preview-grand-total').innerText,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        // Render History Items
+        function renderHistory() {
+            const container = document.getElementById('history-list-container');
+            const searchQuery = (document.getElementById('historySearch')?.value || '').toLowerCase();
+            updateHistoryBadge();
+
+            if (invoiceHistory.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-gray-500">
+                        <i class="fa-solid fa-box-open text-4xl mb-2 text-gray-600"></i>
+                        <p class="text-xs">No saved invoices found in history.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const filtered = invoiceHistory.filter(i => 
+                i.invoiceNumber.toLowerCase().includes(searchQuery) || 
+                i.client.name.toLowerCase().includes(searchQuery)
+            );
+
+            container.innerHTML = '';
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'glass-card p-4 rounded-xl flex flex-col justify-between gap-3 border border-gray-800 hover:border-cyan-500/40 transition';
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="font-mono font-bold text-xs text-cyan-400">${item.invoiceNumber}</span>
+                            <span class="text-[10px] text-gray-400">${item.issueDate}</span>
+                        </div>
+                        <h3 class="font-bold text-xs text-white">${item.client.name}</h3>
+                        <p class="text-[11px] font-mono text-emerald-400 font-bold mt-1">${item.grandTotal}</p>
+                    </div>
+                    <div class="flex items-center gap-2 pt-2 border-t border-gray-800">
+                        <button onclick="loadInvoiceFromHistory('${item.invoiceNumber}')" class="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 transition">
+                            Load to Editor
+                        </button>
+                        <button onclick="deleteHistoryItem('${item.invoiceNumber}')" class="p-1.5 rounded-lg text-[11px] text-red-400 hover:bg-red-500/20 transition">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Update History Badge Count
+        function updateHistoryBadge() {
+            const badge = document.getElementById('history-badge');
+            if (badge) badge.innerText = invoiceHistory.length;
+        }
+
+        // Load Item Back into Editor
+        function loadInvoiceFromHistory(invNo) {
+            const item = invoiceHistory.find(i => i.invoiceNumber === invNo);
+            if (!item) return;
+
+            document.getElementById('invoiceNumber').value = item.invoiceNumber;
+            document.getElementById('issueDate').value = item.issueDate;
+            document.getElementById('dueDate').value = item.dueDate;
+            document.getElementById('currencySelect').value = item.currency || 'ETB';
+
+            document.getElementById('issuerName').value = item.issuer.name || '';
+            document.getElementById('issuerPhone').value = item.issuer.phone || '';
+            document.getElementById('issuerEmail').value = item.issuer.email || '';
+            document.getElementById('issuerTin').value = item.issuer.tin || '';
+
+            document.getElementById('clientName').value = item.client.name || '';
+            document.getElementById('clientContact').value = item.client.contact || '';
+
+            document.getElementById('bankName').value = item.payment.bank || '';
+            document.getElementById('bankAccName').value = item.payment.accName || '';
+            document.getElementById('bankAccNo').value = item.payment.accNo || '';
+
+            lineItems = item.lineItems || [];
+            renderLineItems();
+            updateInvoice();
+            switchTab('editor');
+            showToast(`Loaded ${invNo} into editor!`, "info");
+        }
+
+        // Delete Single Item
+        function deleteHistoryItem(invNo) {
+            invoiceHistory = invoiceHistory.filter(i => i.invoiceNumber !== invNo);
+            localStorage.setItem('ruptura_invoices_history', JSON.stringify(invoiceHistory));
+            renderHistory();
+            showToast("Item deleted from history.", "warning");
+        }
+
+        // Clear All History
+        function clearAllHistory() {
+            if (confirm("Are you sure you want to clear all saved history?")) {
+                invoiceHistory = [];
+                localStorage.removeItem('ruptura_invoices_history');
+                renderHistory();
+                showToast("All history cleared.", "warning");
+            }
+        }
+
+        // Helper Toast Notification
+        function showToast(message, type = "success") {
+            const modal = document.getElementById('toast-modal');
+            const messageEl = document.getElementById('toast-message');
+            const iconEl = document.getElementById('toast-icon');
+
+            messageEl.innerText = message;
+
+            if (type === "success") {
+                iconEl.className = "fa-solid fa-circle-check text-emerald-400 text-lg";
+            } else if (type === "warning") {
+                iconEl.className = "fa-solid fa-triangle-exclamation text-amber-400 text-lg";
+            } else {
+                iconEl.className = "fa-solid fa-circle-info text-sky-400 text-lg";
+            }
+
+            modal.classList.remove('translate-y-20', 'opacity-0');
+            modal.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                modal.classList.remove('translate-y-0', 'opacity-100');
+                modal.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
